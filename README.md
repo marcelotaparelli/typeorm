@@ -92,11 +92,155 @@ npx typeorm migration:run
 - **Entities** → representam tabelas.  
 - **Repositories/Manager** → manipulam dados (CRUD).  
 - **Migrations** → controlam evolução do schema.  
-- **Decorators** → definem colunas, chaves, relacionamentos.  
+- **Decorators** → definem colunas, chaves, relacionamentos.
 
 
-## Boas práticas
-- Use `synchronize: false` em produção e confie em **migrations**.  
-- Centralize a configuração no `DataSource`.  
-- Separe entidades em uma pasta `entity/`.  
-- Use `Repository` para consultas complexas em vez de `manager`.
+## Tipos de relacionamentos suportados
+- **One-to-One (1:1)** → um registro está ligado a apenas um outro.
+- **One-to-Many (1:N)** → um registro pode estar ligado a vários outros.
+- **Many-to-Many (N:M)** → vários registros podem estar ligados a vários outros.
+
+---
+
+## Exemplo 1: One-to-Many (Usuário e Posts)
+```ts
+// entity/User.ts
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from "typeorm";
+import { Post } from "./Post";
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  nome: string;
+
+  @OneToMany(() => Post, (post) => post.user)
+  posts: Post[];
+}
+
+// entity/Post.ts
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from "typeorm";
+import { User } from "./User";
+
+@Entity()
+export class Post {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  titulo: string;
+
+  @ManyToOne(() => User, (user) => user.posts)
+  user: User;
+}
+```
+
+### Uso
+```ts
+const user = new User();
+user.nome = "Marcelo";
+await AppDataSource.manager.save(user);
+
+const post = new Post();
+post.titulo = "Meu primeiro post";
+post.user = user;
+await AppDataSource.manager.save(post);
+```
+
+
+## Exemplo 2: Many-to-Many (Estudantes e Cursos)
+```ts
+// entity/Student.ts
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable } from "typeorm";
+import { Course } from "./Course";
+
+@Entity()
+export class Student {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  nome: string;
+
+  @ManyToMany(() => Course, (course) => course.students)
+  @JoinTable()
+  courses: Course[];
+}
+
+// entity/Course.ts
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from "typeorm";
+import { Student } from "./Student";
+
+@Entity()
+export class Course {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  titulo: string;
+
+  @ManyToMany(() => Student, (student) => student.courses)
+  students: Student[];
+}
+```
+
+### Uso
+```ts
+const student = new Student();
+student.nome = "Ana";
+
+const course = new Course();
+course.titulo = "Matemática";
+
+student.courses = [course];
+
+await AppDataSource.manager.save(student);
+```
+
+
+## Exemplo 3: One-to-One (Perfil e Usuário)
+```ts
+// entity/Profile.ts
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne } from "typeorm";
+import { User } from "./User";
+
+@Entity()
+export class Profile {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  bio: string;
+
+  @OneToOne(() => User, (user) => user.profile)
+  user: User;
+}
+
+// entity/User.ts
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn } from "typeorm";
+import { Profile } from "./Profile";
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  nome: string;
+
+  @OneToOne(() => Profile, (profile) => profile.user)
+  @JoinColumn()
+  profile: Profile;
+}
+```
+
+
+## Resumo
+- Use **decorators** (`@OneToMany`, `@ManyToOne`, `@ManyToMany`, `@OneToOne`) para definir relacionamentos.  
+- Sempre defina o lado inverso da relação para manter consistência.  
+- Use `@JoinColumn` em **One-to-One** e `@JoinTable` em **Many-to-Many**.  
+- O TypeORM cuida das chaves estrangeiras e tabelas intermediárias automaticamente.
+
+
